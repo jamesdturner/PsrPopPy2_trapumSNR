@@ -153,6 +153,8 @@ def generate(ngen,
         while (pulsar.p0 <= 0.):
           if(pDistType == 'norm'):
             pulsar.p0 = random.gauss(pop.pmean, pop.psigma)
+#          if(pDistType == 'igf22'):
+#            pulsar.p0 = dists.drawlnorm(pop.pmean, pop.psigma) # i dont think this is right
           elif(pDistType == 'drl15'):
             L_p0 = np.random.lognormal(mean = pop.pmean, sigma = pop.psigma)  
             pulsar.p0 = np.exp(L_p0)/1000         # period in seconds
@@ -354,7 +356,7 @@ def generate(ngen,
             else:
                 # no survey list, just add the pulsar to population,
                 # and increment number of pulsars
-                if pulsar.beaming:# JDT beaming consideration
+                if pulsar.beaming:
                     pop.ndet += 1
                 # update the counter
                 if not nostdout:
@@ -426,13 +428,8 @@ def galacticDistribute(pulsar, pop):
         x, y = go.spiralize(r0)
     else:
         # distribute randomly in x-y plane
-        #x = -20. + random.random()*40.
-        #y = -20. + random.random()*40.
-        # JDT edit: distribute randomly in circle of radius 15kpc
-        Theta = 2*math.pi * random.random()
-        R = random.random()*15.
-        x = R*math.cos(Theta)
-        y = R*math.sin(Theta)
+        x = -20. + random.random()*40.
+        y = -20. + random.random()*40.
 
     # calculate z and r0
     z = dists.draw_double_sided_exp(pop.zscale)
@@ -457,13 +454,10 @@ def alignpulsar(pulsar, pop):
     elif pop.alignModel == 'random':
         chi = math.acos(random.random())  # in radians
 
-        #pulsar.chi = math.degrees(chi)  # -> degrees
-        pulsar.chi = chi*180.0/math.pi
-        #pulsar.sinchi_init = math.sin(math.radians(chi))
-        pulsar.sinchi_init = math.sin(chi)
+        pulsar.chi = math.degrees(chi)  # -> degrees
+        pulsar.sinchi_init = math.sin(math.radians(chi))
         pulsar.sinchi = pulsar.sinchi_init
-        #pulsar.coschi = math.cos(math.radians(chi))
-        pulsar.coschi = math.cos(chi)
+        pulsar.coschi = math.cos(math.radians(chi))
 
     elif pop.alignModel == 'rand45':
         pulsar.coschi = random.random() * (1.0 - math.sqrt(0.5)) \

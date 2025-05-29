@@ -17,12 +17,14 @@ class Detections:
     def __init__(self,
                  ndet=None,
                  ndisc=None,
+                 nbeam=None,# JDT beaming consideration
                  nsmear=None,
                  nout=None,
                  nbr=None,
                  ntf=None):
         self.ndet = ndet
         self.ndisc = ndisc
+        self.nbeam = nbeam# JDT beaming consideration
         self.nsmear = nsmear
         self.nout = nout
         self.nbr = nbr
@@ -37,6 +39,7 @@ def loadModel(popfile='populate.model', popmodel=None):
             pop = cPickle.load(f)
     else:
         pop = popmodel
+    print([psr.period for psr in pop.population])
 
     return pop
 
@@ -68,6 +71,7 @@ def write(surveyPops,
             filename = ''.join([surv, '.summary'])
             s = 'Detected {0}'.format(detected.ndet)
             s = '\n'.join([s, 'Ndiscovered {0}'.format(detected.ndisc)])
+            s = '\n'.join([s, 'Nbeaming {0}'.format(detected.nbeam)])# JDT beaming consideration
             s = '\n'.join([s, 'Nsmear {0}'.format(detected.nsmear)])
             s = '\n'.join([s, 'Nfaint {0}'.format(detected.nfaint)])
             s = '\n'.join([s, 'Nout {0}'.format(detected.nout)])
@@ -107,6 +111,7 @@ def run(pop,
         # HERE SHOULD INCLUDE THE PROPERTIES OF THE ORIGINAL POPULATION
 
         # counters
+        nbeam = 0# JDT beaming consideration
         nsmear = 0
         nout = 0
         ntf = 0
@@ -120,7 +125,7 @@ def run(pop,
 
             # is the pulsar over the detection threshold?
             snr = s.SNRcalc(psr, pop,accelsearch,jerksearch,rratssearch)
-            #print snr
+            # print snr
 
             # add scintillation, if required
             # modifying S/N rather than flux is sensible because then
@@ -147,6 +152,8 @@ def run(pop,
                 nout += 1
             elif snr == -3.0:
                 nbr += 1
+            elif snr == -4.0:
+                nbeam += 1# JDT beaming consideration
             else:
                 ntf += 1
 
@@ -155,6 +162,7 @@ def run(pop,
             print "Total pulsars in model = {0}".format(len(pop.population))
             print "Number detected by survey {0} = {1}".format(surv, ndet)
             print "Of which are discoveries = {0}".format(s.discoveries)
+            print "Number beaming away = {0}".format(nbeam)# JDT beaming consideration
             print "Number too faint = {0}".format(ntf)
             print "Number smeared = {0}".format(nsmear)
             print "Number out = {0}".format(nout)
@@ -164,6 +172,7 @@ def run(pop,
 
         d = Detections(ndet=ndet,
                        ntf=ntf,
+                       nbeam=nbeam,# JDT beaming consideration
                        nsmear=nsmear,
                        nout=nout,
                        nbr=nbr,

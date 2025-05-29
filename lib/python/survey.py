@@ -9,7 +9,6 @@ import random
 from scipy.special import j1
 import distributions as dist
 import galacticops as go
-from population import Population
 import radiometer as rad
 import degradation
 
@@ -393,6 +392,8 @@ class Survey:
 
         if pulsar.dead:
             return 0.
+        if pulsar.beaming == False:
+            return -4# JDT beaming consideration
 
         # otherwise check if pulsar is in entire region
         if self.inRegion(pulsar):
@@ -582,9 +583,11 @@ class Survey:
             nl = 359
         i = float(nl) / 4.
 
-        tsky_haslam = self.tskylist[180*int(i) + int(j)]
+        #tsky_haslam = self.tskylist[180*int(i) + int(j)]
+        tsky_gsm16 = self.tskylist[180*int(i) + int(j)]
         # scale temperature before returning
-        return tsky_haslam * (self.freq/408.0)**(-2.6)
+        #return tsky_haslam * (self.freq/408.0)**(-2.6)
+        return tsky_gsm16 * (self.freq/1284.0)**(-2.6)
 
     def scint(self, psr, snr):
         """ Add scintillation effects and modify the pulsar's S/N"""

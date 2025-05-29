@@ -66,11 +66,12 @@ def vxyz(pulsar):
 def calc_dtrue((x, y, z)):
     """Calculate true distance to pulsar from the sun."""
     rsun = 8.5  # kpc
-    return math.sqrt(x*x + (y-rsun)*(y-rsun) + z*z)
+    zsun = 0.006# kpc
+    return math.sqrt(x*x + (y-rsun)*(y-rsun) + (z-zsun)*(z-zsun))
 
 
 def calcXY(r0):
-    """Calculate the X, Y, Z alactic coords for the pulsar."""
+    """Calculate the X, Y, Z Galactic coords for the pulsar."""
     # calculate a random theta in a unifrom distribution
     theta = 2.0 * math.pi * random.random()
 
@@ -212,6 +213,7 @@ def radec_to_lb(ra, dec):
 def xyz_to_lb((x, y, z)):
     """ Convert galactic xyz in kpc to l and b in degrees."""
     rsun = 8.5  # kpc
+    #rsun=8.2
 
     # distance to pulsar
     d = math.sqrt(x*x + (rsun-y)*(rsun-y) + z*z)
@@ -250,6 +252,7 @@ def xyz_to_lb((x, y, z)):
 def lb_to_xyz(gl, gb, dist):
     """ Convert galactic coords to Galactic XYZ."""
     rsun = 8.5  # kpc
+    #rsun = 8.2
 
     l = math.radians(gl)
     b = math.radians(gb)
@@ -382,7 +385,8 @@ def _double_sided_exp(scale, origin=0.0):
 def readtskyfile():
     """Read in tsky.ascii into a list from which temps can be retrieved"""
 
-    tskypath = os.path.join(fortranpath, 'lookuptables/tsky.ascii')
+    tskypath = os.path.join(fortranpath, 'lookuptables/GSM2016_1284MHz.ascii')
+    #tskypath = os.path.join(fortranpath, 'lookuptables/tsky.ascii')
     tskylist = []
     with open(tskypath) as f:
         for line in f:
