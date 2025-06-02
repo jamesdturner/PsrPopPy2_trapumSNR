@@ -18,7 +18,7 @@ import pygdsm
 from pygdsm import GlobalSkyModel2016
 
 GSM2016 = pygdsm.GlobalSkyModel2016()
-freq=1284 # MHz L-band=1284, S-band=??
+freq=2406.25 # MHz L-band=1284, S-band=2406.25
 
 #l = np.arange(0,360,0.25) # 0 to 359.75 inclusive
 #b = np.arange(-90, 90, 0.25) # -90 to 89.75 inclusive

@@ -385,7 +385,7 @@ def _double_sided_exp(scale, origin=0.0):
 def readtskyfile():
     """Read in tsky.ascii into a list from which temps can be retrieved"""
 
-    tskypath = os.path.join(fortranpath, 'lookuptables/GSM2016_1284MHz.ascii')
+    tskypath = os.path.join(fortranpath, 'lookuptables/GSM2016_1284MHz.ascii') # JDT
     #tskypath = os.path.join(fortranpath, 'lookuptables/tsky.ascii')
     tskylist = []
     with open(tskypath) as f:

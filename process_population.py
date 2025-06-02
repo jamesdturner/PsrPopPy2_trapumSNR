@@ -4,23 +4,28 @@
 Created on Tue Jan 14 18:33:50 2025
 
 A code to build and analyse a population of pulsars from PsrPop(Py)
-Due to constraints in evolving very large populations of (non-beaming) pulsars, this script combines a random set from smaller populations
+Due to constraints in evolving very large populations of (non-beaming) pulsars, this script combines a random set from smaller subpopulations
 
 @author: jturner
 @author_email: james.turner-2@manchester.ac.uk
 
 Run this script in the psrpoppy conda env, as python packages versions wont clash with population generation
-export PYTHONPATH="${PYTHONPATH}":<path to PsrPopPy2>/PsrPopPy2/lib/python
+    export PYTHONPATH="${PYTHONPATH}":<path to PsrPopPy2>/PsrPopPy2_trapumSNR/lib/python
 
 Instructions on how to use PsrPopPy at: http://samb8s.github.io/PsrPopPy/
 PsrPopPy2 has extra commands: https://github.com/devanshkv/PsrPopPy2
 
-generate a normalised population in psrpoppy2 conda env
+generate a normalised subpopulation in psrpoppy2 conda env
 e.g. using the make_population.py script in this fork
+
+Then process them with this routine to produce jsons you can use to plot things.
+Example command: take all model files, combine 10 of them, observing frequency is L-band, repeat 100 times:
+    
+    python process_populations.py -N 100 -n 10 -f L *.model
 
 """
 
-import os, sys
+import os
 try:
     import cPickle
 except ImportError:
@@ -35,13 +40,10 @@ import math
 import numpy as np
 from numpy import random
 import random as rand
-import scipy
 from scipy import stats
-from scipy.integrate import quad
 from scipy.interpolate import interp1d # python2.7 compatible 1d inverse transform sampling
 import astropy.units as u
-import astropy.coordinates
-from astropy.coordinates import SkyCoord, Galactocentric # astropy v2.0.7, docs available here: https://docs.astropy.org/en/older-docs-archive/v2.0.7/index.html
+from astropy.coordinates import SkyCoord # astropy v2.0.7, docs available here: https://docs.astropy.org/en/older-docs-archive/v2.0.7/index.html
 from matplotlib.ticker import AutoMinorLocator
 
 pi = math.pi
@@ -66,7 +68,8 @@ def parse_args():
         description='Run a population(s) of pulsars through the TRAPUM targeted survey of SNRs')
     parser.add_argument('-n', help='Of the set you provide, how many should be combined', type=int, required=True)
     parser.add_argument('-N', help='How many times to run this script. A random combination of n files will be used each time', type=int, default=1)
-    parser.add_argument('-i', help='Interactive mode, this will show and write plots of the first population you provide', action='store_true')
+    parser.add_argument('-f', help='Frequency band you wish to perform the TRAPUM survey at. Options are:\nL (1284 MHz = MeerKAT L-band)\nS (2406.25 MHz = MeerKAT S1)', type=str, choices=['L', 'S'], required=True)
+    parser.add_argument('-i', help='Interactive mode. This will show and save plots of the first population', action='store_true')
     parser.add_argument('fpath', help='Model file(s)', type=os.path.realpath, nargs='*')
     
     return parser.parse_args()
@@ -100,7 +103,7 @@ def assign_vel(psr, inverse_cdf_approx, count):
     phi = pi*random.random()
     # convert to vx, vy, vz
     ### GALACTOCENTRIC COORDS IN PSRPOPPY ARE: 
-    ### +y from gal centre to sun, +x in right when looking top down, +z out of page
+    ### +y from gal centre to sun, +x is rightwards when looking top down, +z out of page
     psr.vx = V3*math.sin(theta)*math.cos(phi) # in km/s
     psr.vy = V3*math.sin(theta)*math.sin(phi)
     psr.vz = V3*math.cos(theta)
@@ -118,9 +121,9 @@ def remnant_expansion(psr, count):
     # phase 1 free expansion until M_ej = M_swept
     M_ej = Mo #                                  ejecta mass, kg
     E_sn = 1e51 #                                SN energy, erg
-    n0 = 1#5.4e-21/mH #                          ISM desnity, /cm3 from 0.08Mo/pc3 Chakrabati+2020
+    n0 = 1 #5.4e-21/mH #                         ISM desnity, /cm3 from 0.08Mo/pc3 Chakrabati+2020
     v_exp = math.sqrt(2*E_sn*1e-7/M_ej)/1000 #   expansion velocity, km/s 
-    R1 = 5.8 * (M_ej/(10*Mo))**(1.0/3) * (n0/0.5)**(-1.0/3) * pc / 1000# radius in km at end of phase 1 from eq3 in Bamba2022
+    R1 = 5.8 * (M_ej/(10*Mo))**(1.0/3) * (n0/0.5)**(-1.0/3) * pc / 1000 # radius in km at end of phase 1 from eq3 in Bamba2022
     
     # phase 2 sedov-Taylor phase
     #R2 = 1e6*(n0*1e51/(E_sn*1.5e10))**3.0 * pc # radius in m at end of ST phase (T=10^6K, eq 7 in Bamba2022)
@@ -129,7 +132,7 @@ def remnant_expansion(psr, count):
         if (v*t)<R1:
             return v * t
         else:
-            return (5.0* n0**-0.2 * (E_sn/1.0e51)**0.2 * ((t)/(yr*1000))**0.4 * pc)/1000 - ((5*(R1/(v*yr*1000))**0.4)*pc/1000 - R1) # eq 5.12 in Vink2020 in km and a second term for contact discontinuity
+            return (5.0* n0**-0.2 * (E_sn/1.0e51)**0.2 * ((t)/(yr*1000))**0.4 * pc)/1000 - ((5*(R1/(v*yr*1000))**0.4)*pc/1000 - R1) # eq 5.12 in Vink2020 in km and a second term for expression discontinuity
     
     psr.remnant_r = expansion_model(v_exp, t, R1)*1000 # in m
     #assign galactocentric coords of remnant centre
@@ -137,7 +140,7 @@ def remnant_expansion(psr, count):
     psr.remnant_gy = psr.galCoords[1]-(psr.vy*t/pc)
     psr.remnant_gz = psr.galCoords[2]-(psr.vz*t/pc)
     psr.remnant_r0 = math.sqrt(abs(psr.remnant_gx**2 + psr.remnant_gy**2))# in kpc
-    #assign remnant distance, sun at (0, 8.2, 0.006)
+    #assign remnant distance
     psr.remnant_dist = math.sqrt(abs((psr.remnant_gx-xsun)**2 + (psr.remnant_gy-ysun)**2 + (psr.remnant_gz-zsun/1000)**2))
     # assign boolean for if distance from pulsar to remnant is bigger than radius
     if psr.remnant_r/pc < psr.V3*t*1.0e3/pc:
@@ -179,11 +182,17 @@ def in_or_out(psr):
  
     return
 
-def readtskyfile():
+def readtskyfile(args):
     
-    """Read in tsky.ascii into a list from which temps can be retrieved"""
-
-    tskypath = 'GSM2016_1284MHz.ascii'
+    """Read in correct Tsky ascii into a list from which temps can be retrieved"""
+    
+    # get the FORTRAN libraries
+    __dir__ = os.path.dirname(os.path.abspath(__file__))
+    fortranpath = os.path.join(__dir__, 'lib/fortran')
+    if args.f == 'L':
+        tskypath = os.path.join(fortranpath, 'lookuptables/GSM2016_1284MHz.ascii')
+    else:
+        tskypath = os.path.join(fortranpath, 'lookuptables/GSM2016_2406.25MHz.ascii')
     tskylist = []
     with open(tskypath) as f:
         for line in f:
@@ -224,20 +233,20 @@ def get_Tsky(psr, tskylist):
 
 
 
-def get_Weff(psr, t_samp):
+def get_Weff(psr, t_samp, freq, bw, nchan):
     
     """Calculate the effective width seen by TRAPUM in ms"""
     
-    psr.t_dm = 8.3e6 * psr.dm * 856.0/4096 / math.pow(1284.0, 3.0)
-    psr.t_scatt_1284 = go.scale_bhat(psr.t_scatter, 1284.0, psr.scindex) # scale to L-band
+    psr.t_dm = 8.3e6 * psr.dm * (bw/1.0e6) / nchan / math.pow(freq, 3.0) # freq and bw should be in MHz
+    psr.t_scatt = go.scale_bhat(psr.t_scatter, freq, psr.scindex) # scale to observing frequency
     
     psr.width_ms = psr.width_degree * psr.period / 360.0 
     
-    return math.sqrt(psr.width_ms**2 + (1000*t_samp)**2 + psr.t_dm**2 + psr.t_scatt_1284**2)
+    return math.sqrt(psr.width_ms**2 + (1000*t_samp)**2 + psr.t_dm**2 + psr.t_scatt**2)
     
 def calc_snr(flux, beta, Tsys, gain, n_p, t_obs, bw, duty):
 
-    """Calculate the S/N ratios for TRAPUM assuming radiometer equation (from psrpoppy radiometer.py)"""
+    """Calculate the S/N ratios for TRAPUM assuming radiometer equation (from psrpoppy2's radiometer.py)"""
 
     signal = 1000 * beta * Tsys * math.sqrt(duty / (1.0 - duty)) \
             / gain / math.sqrt(n_p * t_obs * bw) # mJy
@@ -246,26 +255,36 @@ def calc_snr(flux, beta, Tsys, gain, n_p, t_obs, bw, duty):
 
 def calc_sensitivity(beta, Tsys, gain, n_p, t_obs, bw, duty):
     
-    """Calculate the TRAPUM's sensitivity to a pulsar assuming radiometer equation """
+    """Calculate TRAPUM's sensitivity to a pulsar assuming radiometer equation """
     
     flux = 1000 * beta * Tsys * math.sqrt(duty / (1.0 - duty)) \
             / gain / math.sqrt(n_p * t_obs * bw) # mJy
     
     return snr_threshold * flux # mJy
 
-def trapum_snr(yng_pop):
-    # to consider; gain of meerkat, spectral index, obs freq, smearing contributions, Tsky?
-    # do the cuts in stages to track number of pulsars
-    bw = 856.0e6 # this is in Hz, so radiometer will be in Jy unless explicity converted!
-    Trec = 18 + 4.5 # rec+spill
+def trapum_snr(yng_pop, args):
+    
+    """ Assign flux of pulsar in TRAPUM survey """
+    
     beta = 1.00 / 0.65 / 0.7 # digitisation, multibeam overlap, spectral
+    if args.f == 'L':
+        freq = 1284.0 # MHz
+        bw = 856.0e6 # this is in Hz, so radiometer will be in Jy unless explicity converted!
+        Trec = 18 + 4.5 # K, rec+spill
+        nchan = 4096
+    else:
+        freq = 2406.25 # MHz
+        bw = 875.0e6 # Hz
+        Trec = 22 # K, from Padmanabh+2023 A1
+        nchan = 1024
+    
     for psr in yng_pop:
-        psr.t_samp = random.choice([32, 64])*4096/bw # us, random 153 or 306 
+        psr.t_samp = random.choice([32, 64])*nchan/bw # us, random 153 or 306 
         psr.t_obs = random.choice([1200.0, 1800.0, 2400.0], 1, p=[12./Ntargs, 9./Ntargs, 98./Ntargs])
         psr.gain = 2.8 * random.choice([45.0, 59.2])/64.0 # K/Jy,  mean core or mean full Ndish
         Tsys = Trec + psr.tsky # K
-        psr.s_1284 = psr.s_1400() * (1284.0/1400.0)**psr.spindex # mJy, L-band freq conversion
-        duty = get_Weff(psr, psr.t_samp) / psr.period
+        psr.s_trapum_freq = psr.s_1400() * (freq/1400.0)**psr.spindex # mJy, scale the pulsar flux to trapum observing freq
+        duty = get_Weff(psr, psr.t_samp, freq, bw, nchan) / psr.period
         psr.duty = duty # overwriting intrinsic with effective
         sensitivity_unsmeared = calc_sensitivity(beta, Tsys, psr.gain, 2, psr.t_obs, bw, psr.width_degree/360.0) # calc flux limit to non-smeared pulse
         psr.detectable_unsmeared = False # set to false
@@ -275,10 +294,10 @@ def trapum_snr(yng_pop):
         elif duty > 0.75:
             psr.spectral_snr = -2 # too smeared
             psr.sensitivity = -2
-            if psr.s_1284 > sensitivity_unsmeared:
+            if psr.s_trapum_freq > sensitivity_unsmeared:
                 psr.detectable_unsmeared = True # but bright enough to be detected without smearing!
         else:
-            psr.spectral_snr = calc_snr(psr.s_1284, beta, Tsys, psr.gain, 2, psr.t_obs, bw, duty)
+            psr.spectral_snr = calc_snr(psr.s_trapum_freq, beta, Tsys, psr.gain, 2, psr.t_obs, bw, duty)
             psr.sensitivity = calc_sensitivity(beta, Tsys, psr.gain, 2, psr.t_obs, bw, psr.duty)
     return
 
@@ -322,28 +341,12 @@ def do_trapum_survey(sample_pop, yng_pop):
 
 def make_plots(yng_pop):
     
-    ### for thesis
-    #PPdot
-    fig, ax = plt.subplots(figsize=(8,6))
-    edots=[np.log10(psr.edot()) for psr in yng_pop]
-    cb = plt.cm.get_cmap('Oranges')
-    theplot = ax.scatter([psr.period/1000 for psr in yng_pop], [np.log10(psr.pdot) for psr in yng_pop], marker='*', c=edots, cmap=cb)
-    plt.colorbar(theplot, label='log$_{10}\dot{E}$, erg s$^{-1}$', ax=ax)
-    #axs[0,1].set_yscale('log'); axs[0,1].set_xscale('log'); 
-    #axs[0,1].set_ylim(1.0e-16, 1.0e-10); axs[0,1].set_xlim(0.001, math.log10(2))
-    ax.set_xlabel('$P$, s'); ax.set_ylabel('log$_{10}\dot{P}$')
-    ax.grid()
-    ax.set_xscale('log')
-    xlim = ax.get_xlim()
-    ax.plot([xlim[0], xlim[1]], [np.log10((xlim[0])/(2*1.0e5*yr)), np.log10((xlim[1])/(2*1.0e5*yr))], label='$\\tau_{c}$ = 100 kyr')
-    ax.legend()
-    #fig.savefig('/home/mbcxajt2/Documents/Theses/JTurner/Plots/synthetic-PPdot.pdf', format="pdf", bbox_inches="tight")
+    """ Make a diagnostic plot of population N=1 """
     
-    ##### SOME PLOTS ######
     fig, axs = plt.subplots(figsize=(18,18), nrows=2, ncols=2)
-    # scattering vs dm
+    # Scattering vs DM
     axs[0,0].scatter([psr.dm for psr in yng_pop], [np.log10(psr.t_scatter) for psr in yng_pop], marker='.', color='grey', alpha=0.7, label='synthetic pulsars')
-    axs[0,0].set_xscale('log'); #axs[0,0].set_yscale('log'); axs[0,0].set_ylim(1.0e-6, 1.0e8); axs[0,0].set_xlim(0.1, math.log10(2000))
+    axs[0,0].set_xscale('log')
     axs[0,0].set_xlabel('log(DM), pc/cm$^{3}$'); axs[0,0].set_ylabel('log($\\tau_{sc}$ (1400 MHz), ms')
     axs[0,0].grid()
     dm = range(10, 3000)
@@ -357,14 +360,12 @@ def make_plots(yng_pop):
     cb = plt.cm.get_cmap('Oranges')
     theplot = axs[0,1].scatter([np.log10(psr.period/1000) for psr in yng_pop], [np.log10(psr.pdot) for psr in yng_pop], marker='*', c=edots, cmap=cb)
     plt.colorbar(theplot, label='log$_{10}\dot{E}$, erg s$^{-1}$', ax=axs[0,1])
-    #axs[0,1].set_yscale('log'); axs[0,1].set_xscale('log'); 
-    #axs[0,1].set_ylim(1.0e-16, 1.0e-10); axs[0,1].set_xlim(0.001, math.log10(2))
     axs[0,1].set_xlabel('log$_{10}P$, s'); axs[0,1].set_ylabel('log$_{10}\dot{P}$')
     axs[0,1].grid()
     xlim = axs[0,1].get_xlim()
     axs[0,1].plot([xlim[0], xlim[1]], [np.log10(10**(xlim[0])/(2*1.0e5*yr)), np.log10(10**(xlim[1])/(2*1.0e5*yr))], label='$\\tau_{c}$ = 100 kyr')
     axs[0,1].legend()
-    #Positions
+    # Positions and Tsky cmap
     tsky=[psr.tsky for psr in yng_pop]
     cb = plt.cm.get_cmap('magma')
     theplot = axs[1,0].scatter([psr.gl for psr in yng_pop], [psr.gb for psr in yng_pop], marker='x', c=tsky, cmap=cb)
@@ -378,7 +379,7 @@ def make_plots(yng_pop):
     axs[1,1].grid(); axs[1,1].legend()
             
     fig.tight_layout()
-    fig.savefig('/home/mbcxajt2/jturner/Population/plots/fake-popualtion-example-plots.png')
+    fig.savefig('{}/popualtion-diagnostic-plots.png'.format(os.getcwd()))
     plt.show()
 
 def main():
@@ -408,7 +409,7 @@ def main():
                     pop.population = pop.population + pop_add.population
                     print("Size of population: {}".format(len([psr for psr in pop.population])))
         
-        # now we have built a combined list of pulsars representing a full population
+        # We have now combined the sets of young pulsars into a full Galactic population
         
         Ntot = len([psr for psr in pop.population])
         Nbeam = len([psr for psr in pop.population if psr.beaming==True])
@@ -432,14 +433,15 @@ def main():
         inverse_cdf_approx = interp1d(cdf_approx/cdf_approx.max(), v) # cant directly interpolate the cdf, do normalised cumsum of pdf and return scipy object
         
         if args.i:
-            count=1# counter for showing plot
+            count=1 # condition for showing plot
             plt.scatter([psr.galCoords[0] for psr in yng_pop], [psr.galCoords[1] for psr in yng_pop], marker='x')
             plt.ylabel('Galactic Y, kpc'); plt.xlabel('Galactic X, kpc'); plt.xlim(-20, 20); plt.ylim(-20, 20)
-            plt.savefig('/home/mbcxajt2/jturner/Population/plots/galactocentric-positions.png'); plt.show()
+            plt.savefig('{}/galactocentric-positions.png'.format(os.getcwd())); plt.show()
         else:
-            count=0
-            
-        tskylist = readtskyfile()
+            count=0 # turn off condition
+
+        
+        tskylist = readtskyfile(args)
         for psr in yng_pop:
             
             psr.trapum = False # set initial boolean as not searched
@@ -483,12 +485,12 @@ def main():
             ax.yaxis.set_ticks_position('both')
             ax.tick_params(axis='both', direction='in', which='both', width=2)
             ax.grid(color='grey')
-        fig.savefig('/home/mbcxajt2/jturner/Population/plots/after-skycut.pdf', format='pdf', bbox_inches="tight"); 
+        fig.savefig('{}/after-skycut.pdf'.format(os.getcwd()), format='pdf', bbox_inches="tight"); 
         if args.i:
             plt.show()
         
         # recompute S/N for TRAPUM survey
-        trapum_snr(yng_pop)
+        trapum_snr(yng_pop, args)
         print("Survey {} complete".format(N))
         # acquire sample of remnants for trapum survey
         do_trapum_survey(sample_pop, yng_pop)
@@ -498,10 +500,10 @@ def main():
         print("Number of these searched by TRAPUM (should be {}): {}".format(Ntargs, len([psr for psr in yng_pop if psr.trapum==True])))
         print("Number of detections by TRAPUM: {}".format(len([psr for psr in yng_pop if any([psr.trapum==True and psr.spectral_snr > snr_threshold and psr.inside==True])])))
         
-        # write out to new dictionary
-        output_file = os.path.join(path, 'test.json'.format(N))
+        # write out to new dictionary in current working directory
+        output_file = os.path.join(os.getcwd(), 'survey_{}_{}.trapum.json'.format(N, args.f))
         if os.path.exists(output_file):
-            print('Warning: writing to file that already exists')
+            print('Warning: Overwriting a file that already exists')
         with open(output_file, 'w') as file:
             survey_population = {}
             i=0
@@ -519,21 +521,21 @@ def main():
                     'spectral_snr': float(psr.spectral_snr),
                     'sensitivity': psr.sensitivity, # mJy, TRAPUM
                     'detectable_unsmeared': psr.detectable_unsmeared, # if width intrinsic, detectable?
-                    's_1284': float(psr.s_1284), # mJy
+                    's_trapum_freq': float(psr.s_trapum_freq), # mJy, freq at trapum observing freq
                     'lum_1400': float(psr.lum_1400), # mJy kpc2
                     's_1400': float(psr.s_1400()), # mJy
                     'spindex': float(psr.spindex), # -ve
                     'char_age': float(psr.period / 2 / (psr.pdot*yr) / 1000), # yr
                     'edot': float(psr.edot()), # erg/s
                     'width_ms': float(psr.width_ms), # ms, unsmeared
-                    't_scatt_1284': float(psr.t_scatt_1284), # ms at L-band
-                    't_dm': float(psr.t_dm), # ms
+                    't_scatt': float(psr.t_scatt), # ms, at the observing freq
+                    't_dm': float(psr.t_dm), # ms, at the observing freq
                     't_samp': float(psr.t_samp), # s, sampling time for the observation
                     'gain': float(psr.gain), # K/Jy, gain for the observation
                     't_obs': float(psr.t_obs), # s integration time of the observation
-                    'tsky': float(psr.tsky), # K
+                    'tsky': float(psr.tsky), # K, at the observing freq
                     'beaming': psr.beaming, # True if beaming towards Earth
-                    'detected': psr.detected,# in the previous surveys
+                    'detected': psr.detected, # in dosurvey
                     'outside_remnant': psr.left, # True if actually outside shell
                     'appears_inside': psr.inside, # True is appears inside shell
                     'remnant_r': float(psr.remnant_r/pc), # pc

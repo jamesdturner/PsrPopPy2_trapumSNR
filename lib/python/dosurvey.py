@@ -111,7 +111,7 @@ def run(pop,
         # HERE SHOULD INCLUDE THE PROPERTIES OF THE ORIGINAL POPULATION
 
         # counters
-        nbeam = 0# JDT beaming consideration
+        nbeam = 0 # JDT beaming consideration
         nsmear = 0
         nout = 0
         ntf = 0
@@ -153,7 +153,7 @@ def run(pop,
             elif snr == -3.0:
                 nbr += 1
             elif snr == -4.0:
-                nbeam += 1# JDT beaming consideration
+                nbeam += 1 # JDT beaming consideration
             else:
                 ntf += 1
 

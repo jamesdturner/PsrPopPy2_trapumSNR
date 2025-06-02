@@ -565,7 +565,7 @@ class Survey:
         return 8.3E6 * psr.dm * self.bw_chan / math.pow(self.freq, 3.0)
 
     def tskypy(self, psr):
-        """ Calculate tsky from Haslam table, scale to survey frequency"""
+        """ Calculate tsky from GSM2016 1284 MHz table, scale to survey frequency"""
         # ensure l is in range 0 -> 360
         b = psr.gb
         if psr.gl < 0.:
@@ -584,10 +584,10 @@ class Survey:
         i = float(nl) / 4.
 
         #tsky_haslam = self.tskylist[180*int(i) + int(j)]
-        tsky_gsm16 = self.tskylist[180*int(i) + int(j)]
+        tsky_gsm16 = self.tskylist[180*int(i) + int(j)] # JDT
         # scale temperature before returning
         #return tsky_haslam * (self.freq/408.0)**(-2.6)
-        return tsky_gsm16 * (self.freq/1284.0)**(-2.6)
+        return tsky_gsm16 * (self.freq/1284.0)**(-2.6) # JDT scale from 1284 MHz GSM16 is more accurate
 
     def scint(self, psr, snr):
         """ Add scintillation effects and modify the pulsar's S/N"""
