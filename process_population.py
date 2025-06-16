@@ -109,6 +109,15 @@ def assign_vel(psr, inverse_cdf_approx, count):
     psr.vz = V3*math.cos(theta)
     #print(psr.vx, psr.vy, psr.vz)
     #print(math.sqrt(psr.vx**2+psr.vy**2+psr.vz**2), psr.V3)
+    
+def calc_dder(dtrue):
+    
+    """ Calculate a derived distance which can be used later for self-consistent inclusion of distance uncertainties (see Lorimer et al. 1993) """
+    dder = rand.gauss(dtrue, 0.2*dtrue) # kpc
+    # check not negative
+    if dder <= 0:
+        dder = abs(dder)
+    return dder
 
 def remnant_expansion(psr, count):
     
@@ -444,6 +453,9 @@ def main():
         tskylist = readtskyfile(args)
         for psr in yng_pop:
             
+            # Calculate derived distance 
+            psr.dder = calc_dder(psr.dtrue)
+            
             psr.trapum = False # set initial boolean as not searched
             
             # give each pulsar a new 3D veloicty
@@ -517,13 +529,15 @@ def main():
                     'gal_position': [psr.galCoords[0], psr.galCoords[1], psr.galCoords[2]],
                     'velocity': [psr.vx, psr.vy, psr.vz], # km/s
                     'gal_skycoords': [psr.gl, psr.gb],
-                    'dtrue': float(psr.dtrue), # kpc
+                    'dtrue': float(psr.dtrue), # kpc, true distance
+                    'dder': float(psr.dder), # kpc, derived distance
                     'spectral_snr': float(psr.spectral_snr),
                     'sensitivity': psr.sensitivity, # mJy, TRAPUM
                     'detectable_unsmeared': psr.detectable_unsmeared, # if width intrinsic, detectable?
                     's_trapum_freq': float(psr.s_trapum_freq), # mJy, freq at trapum observing freq
-                    'lum_1400': float(psr.lum_1400), # mJy kpc2
                     's_1400': float(psr.s_1400()), # mJy
+                    'ltrue_1400': float(psr.lum_1400), # mJy kpc2, true luminosity at 1400 MHz
+                    'lpseudo_1400': float(psr.lum_1400)*(psr.dder/psr.dtrue)**2, # mJy kpc2, derived luminosity at 1400 MHz
                     'spindex': float(psr.spindex), # -ve
                     'char_age': float(psr.period / 2 / (psr.pdot*yr) / 1000), # yr
                     'edot': float(psr.edot()), # erg/s
